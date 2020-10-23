@@ -100,6 +100,9 @@ resource "azurerm_linux_virtual_machine_scale_set" "vault" {
     }
   }
 
+  identity {
+    type = "SystemAssigned"
+  }
 
   custom_data = base64encode(templatefile("${path.module}/setup-node.sh", {
     subscription_id = data.azurerm_subscription.primary.subscription_id
@@ -107,7 +110,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "vault" {
     binary_container = data.azurerm_storage_account_blob_container_sas.binaries.container_name
     binary_blob = var.binary_blob
     vault_version = var.vault_version
-    cluster_name = var.cluster_name
+    resource_group = azurerm_resource_group.rg.name
+    scale_set = var.cluster_name
   }))
 
   tags = {
@@ -118,11 +122,24 @@ resource "azurerm_linux_virtual_machine_scale_set" "vault" {
 data "azurerm_subscription" "primary" {}
 data "azurerm_client_config" "current" {}
 
-//resource "azurerm_role_assignment" "vault_role" {
-//  scope                = data.azurerm_subscription.primary.id
-//  role_definition_name = "Reader"
-//  principal_id         = lookup(azurerm_linux_virtual_machine.vault.identity[0], "principal_id")
-//}
+resource "azurerm_role_definition" "stateset-read" {
+  name               = "go-discover"
+  scope              = data.azurerm_subscription.primary.id
+
+  permissions {
+    actions     = ["Microsoft.Compute/virtualMachineScaleSets/*/read"]
+  }
+
+  assignable_scopes = [
+    data.azurerm_subscription.primary.id,
+  ]
+}
+
+resource "azurerm_role_assignment" "vault_role" {
+  scope                = data.azurerm_subscription.primary.id
+  role_definition_id   = azurerm_role_definition.stateset-read.role_definition_resource_id
+  principal_id         = azurerm_linux_virtual_machine_scale_set.vault.identity[0].principal_id
+}
 
 resource "azurerm_storage_account" "storage" {
   name                     = var.storage_account_name

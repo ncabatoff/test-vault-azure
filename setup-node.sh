@@ -32,7 +32,7 @@ log_level = "trace"
 storage "raft" {
   path    = "/opt/vault/data"
   retry_join {
-    auto_join = "provider=azure tag_name=scaleSetName tag_value=${cluster_name} subscription_id=${subscription_id}"
+    auto_join = "provider=azure subscription_id=${subscription_id} resource_group=${resource_group} vm_scale_set=${scale_set}"
     auto_join_scheme = "http"
     auto_join_port = 8200
   }
