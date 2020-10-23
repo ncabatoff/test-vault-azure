@@ -34,7 +34,7 @@ variable "public_ip_name" {
   default = "vault"
 }
 
-variable "vm_name" {
+variable "cluster_name" {
   default = "vault"
 }
 

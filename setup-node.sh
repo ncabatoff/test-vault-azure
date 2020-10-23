@@ -22,6 +22,8 @@ gunzip -f /tmp/vault.gz
 cp /tmp/vault /usr/bin/vault
 /sbin/setcap cap_ipc_lock=+ep /usr/bin/vault
 
+myip=$(curl -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/privateIpAddress?api-version=2017-08-01&format=text")
+
 cat << EOF > /etc/vault.d/vault.hcl
 disable_performance_standby = true
 ui = true
@@ -30,13 +32,13 @@ log_level = "trace"
 storage "raft" {
   path    = "/opt/vault/data"
   retry_join {
-    auto_join = "provider=azure tag_name=owner tag_value=ncabatoff subscription_id=${subscription_id}"
+    auto_join = "provider=azure tag_name=scaleSetName tag_value=${cluster_name} subscription_id=${subscription_id}"
     auto_join_scheme = "http"
     auto_join_port = 8200
   }
 }
 
-cluster_addr = "http://${private_ip}:8201"
+cluster_addr = "http://$myip:8201"
 api_addr = "http://0.0.0.0:8200"
 
 listener "tcp" {

@@ -55,26 +55,21 @@ resource "azurerm_public_ip" "public_ip" {
   domain_name_label   = "${var.resource_group_name}-ssh"
 }
 
-resource "azurerm_network_interface" "vnic0" {
-  name                      = var.vnic_name
-  location                  = var.location
-  resource_group_name       = azurerm_resource_group.rg.name
-
-  ip_configuration {
-    name                          = "IPConfiguration"
-    subnet_id                     = azurerm_subnet.subnet.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.public_ip.id
-  }
+resource "azurerm_public_ip_prefix" "vault" {
+  name                = "vaultpfx"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  prefix_length = 28
 }
 
-resource "azurerm_linux_virtual_machine" "vault" {
-  name                          = var.vm_name
-  location                      = var.location
-  resource_group_name           = azurerm_resource_group.rg.name
-  network_interface_ids         = [azurerm_network_interface.vnic0.id]
-  admin_username                = "adminuser"
-  size                = "Standard_D2s_v3"
+resource "azurerm_linux_virtual_machine_scale_set" "vault" {
+  name = var.cluster_name
+  location = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  sku = "Standard_D2s_v3"
+  instances = 3
+  admin_username = "adminuser"
+
   source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
@@ -89,42 +84,45 @@ resource "azurerm_linux_virtual_machine" "vault" {
     caching           = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
-  disable_password_authentication = true
-  identity {
-    type = "SystemAssigned"
+
+  network_interface {
+    name    = "nic"
+    primary = true
+
+    ip_configuration {
+      name      = "internal"
+      primary   = true
+      subnet_id = azurerm_subnet.subnet.id
+      public_ip_address {
+        name = "pubip"
+        public_ip_prefix_id = azurerm_public_ip_prefix.vault.id
+      }
+    }
   }
-}
 
-resource "azurerm_virtual_machine_extension" "vault_extension" {
-  name                  = "vault-extension"
-  virtual_machine_id    = azurerm_linux_virtual_machine.vault.id
-  publisher             = "Microsoft.Azure.Extensions"
-  type                  = "CustomScript"
-  type_handler_version  = "2.0"
 
-  settings              = <<SETTINGS
-{
-  "script": "${base64encode(templatefile("${path.module}/setup-node.sh", {
+  custom_data = base64encode(templatefile("${path.module}/setup-node.sh", {
     subscription_id = data.azurerm_subscription.primary.subscription_id
     connection_string = data.azurerm_storage_account_blob_container_sas.binaries.connection_string
     binary_container = data.azurerm_storage_account_blob_container_sas.binaries.container_name
     binary_blob = var.binary_blob
     vault_version = var.vault_version
-    private_ip = azurerm_linux_virtual_machine.vault.private_ip_address
-  }))}"
-}
-SETTINGS
+    cluster_name = var.cluster_name
+  }))
+
+  tags = {
+    scaleSetName = var.cluster_name
+  }
 }
 
 data "azurerm_subscription" "primary" {}
 data "azurerm_client_config" "current" {}
 
-resource "azurerm_role_assignment" "vault_role" {
-  scope                = data.azurerm_subscription.primary.id
-  role_definition_name = "Reader"
-  principal_id         = lookup(azurerm_linux_virtual_machine.vault.identity[0], "principal_id")
-}
-
+//resource "azurerm_role_assignment" "vault_role" {
+//  scope                = data.azurerm_subscription.primary.id
+//  role_definition_name = "Reader"
+//  principal_id         = lookup(azurerm_linux_virtual_machine.vault.identity[0], "principal_id")
+//}
 
 resource "azurerm_storage_account" "storage" {
   name                     = var.storage_account_name
