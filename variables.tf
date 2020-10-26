@@ -55,3 +55,7 @@ variable "binary_blob" {
 
 variable "binary_source" {
 }
+
+variable "snapshot_bucket" {
+  default = "vault-snapshots"
+}

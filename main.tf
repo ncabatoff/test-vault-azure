@@ -180,8 +180,20 @@ data "azurerm_storage_account_blob_container_sas" "binaries" {
   }
 }
 
-output "sas_url_query_string" {
-  value = data.azurerm_storage_account_blob_container_sas.binaries.connection_string
+resource "azurerm_storage_container" "snapshots" {
+  name                  = var.snapshot_bucket
+  storage_account_name  = azurerm_storage_account.storage.name
+  container_access_type = "private"
+}
+
+resource "azurerm_role_assignment" "vault_snapshots_role" {
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_virtual_machine_scale_set.vault.identity[0].principal_id
+  scope                = azurerm_storage_account.storage.id
+}
+
+output "storage_account_primary_key" {
+  value = azurerm_storage_account.storage.primary_access_key
 }
 
 output "vault_public_ip" {
